@@ -2,14 +2,14 @@
   "name": "儿童英语学习打卡",
   "short_name": "英语打卡",
   "description": "本地优先的儿童英语计划、打卡和月度统计工具。",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
-  "background_color": "#f5f7f4",
-  "theme_color": "#2f7d68",
+  "background_color": "#f4f6f2",
+  "theme_color": "#1f6f5f",
   "lang": "zh-CN",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
