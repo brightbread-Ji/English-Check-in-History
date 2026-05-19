@@ -281,15 +281,11 @@ export function createMonthlyAdvice(summary: MonthlySummary) {
   }
 
   if ((classMinutes + speaking) / total < 0.18) {
-    advice.push('口语输出偏少，可在外教课后补 5-10 分钟复述或角色扮演。')
-  }
-
-  if (summary.completionRate < 70 && summary.plannedMinutes > 0) {
-    advice.push('计划完成率低于 70%，可以把非课日计划压到 45 分钟以内。')
+    advice.push('口语输出偏少，可在外教大课后补 5-10 分钟复述或角色扮演。')
   }
 
   if (advice.length === 0) {
-    advice.push('本月阅读、听力和课程配比比较均衡，可以保持当前周节奏。')
+    advice.push('本月阅读、听力和外教大课配比比较均衡，可以保持当前周节奏。')
   }
 
   return advice

@@ -51,10 +51,8 @@ import {
   createMonthlyAdvice,
   formatClock,
   formatMinutes,
-  generateDailySuggestions,
   generateDailyPlan,
   generateScheduledPlan,
-  getMonthDates,
   todayKey,
 } from './planner'
 import type {
@@ -190,7 +188,7 @@ function resourcesForCategory(resources: Resource[], category: Ability) {
     }
 
     if (category === 'speaking') {
-      return resource.abilities.includes('speaking') && resource.type !== 'live-class'
+      return resource.abilities.includes('speaking') || resource.type === 'live-class'
     }
 
     return resource.abilities.includes(category)
@@ -237,6 +235,19 @@ function buildDonutGradient(items: ReturnType<typeof buildAbilityBreakdown>) {
   return `conic-gradient(${segments.join(', ')})`
 }
 
+function buildYearlyActualSummary(year: number, sessions: StudySession[]) {
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = `${year}-${String(index + 1).padStart(2, '0')}`
+    return {
+      month,
+      label: `${index + 1}月`,
+      minutes: sessions
+        .filter((session) => session.date.startsWith(month))
+        .reduce((sum, session) => sum + session.minutes, 0),
+    }
+  })
+}
+
 function compactMinutes(minutes: number) {
   if (minutes < 60) {
     return `${minutes}分`
@@ -280,6 +291,7 @@ function App() {
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null)
   const [resourceDraft, setResourceDraft] = useState<ResourceDraft>(emptyResourceDraft)
   const [scheduleDraft, setScheduleDraft] = useState<ScheduleDraft>(emptyScheduleDraft)
+  const [actualMinutesByPlan, setActualMinutesByPlan] = useState<Record<string, number>>({})
   const [manualDraft, setManualDraft] = useState<ManualDraft>({
     date: todayKey(),
     ability: 'reading',
@@ -292,6 +304,7 @@ function App() {
   const resourceEditorRef = useRef<HTMLElement | null>(null)
 
   const selectedMonth = selectedDate.slice(0, 7)
+  const selectedYear = Number(selectedMonth.slice(0, 4))
 
   const showToast = useCallback((message: string) => {
     setToast(message)
@@ -346,6 +359,7 @@ function App() {
 
   const selectDate = async (date: string) => {
     setSelectedDate(date)
+    setActualMinutesByPlan({})
     setManualDraft((draft) => ({ ...draft, date }))
     await loadData(date)
   }
@@ -356,14 +370,6 @@ function App() {
         .filter((plan) => plan.date === selectedDate)
         .sort((a, b) => a.order - b.order),
     [planItems, selectedDate],
-  )
-
-  const dailySuggestions = useMemo(
-    () =>
-      settings
-        ? generateDailySuggestions(selectedDate, resources, schedules, settings, datePlans)
-        : [],
-    [datePlans, resources, schedules, selectedDate, settings],
   )
 
   const dateSessions = useMemo(
@@ -378,6 +384,7 @@ function App() {
     () => buildMonthlySummary(selectedMonth, resources, planItems, sessions),
     [planItems, resources, selectedMonth, sessions],
   )
+  const yearlySummary = useMemo(() => buildYearlyActualSummary(selectedYear, sessions), [selectedYear, sessions])
 
   const advice = useMemo(() => createMonthlyAdvice(monthlySummary), [monthlySummary])
   const todayAbilityBreakdown = useMemo(() => buildAbilityBreakdown(datePlans, resources), [datePlans, resources])
@@ -386,18 +393,19 @@ function App() {
   const todayPlanned = datePlans.reduce((sum, plan) => sum + plan.plannedMinutes, 0)
   const todayActual = dateSessions.reduce((sum, session) => sum + session.minutes, 0)
   const todayRemaining = Math.max(0, todayPlanned - todayActual)
+  const monthlyStudyDays = monthlySummary.byDay.filter((day) => day.actual > 0).length
+  const monthlyActualAverage = monthlyStudyDays > 0 ? Math.round(monthlySummary.totalMinutes / monthlyStudyDays) : 0
+  const yearlyTotalMinutes = yearlySummary.reduce((sum, item) => sum + item.minutes, 0)
+  const yearlyActiveMonths = yearlySummary.filter((item) => item.minutes > 0).length
   const enabledResources = resources.filter((resource) => resource.enabled)
   const plannedResourceIds = new Set(datePlans.map((plan) => plan.resourceId))
   const suggestionResourceOptions = resourcesForCategory(enabledResources, selectedSuggestionCategory).filter(
     (resource) => !plannedResourceIds.has(resource.id),
   )
-  const suggestionByResourceId = new Map(dailySuggestions.map((suggestion) => [suggestion.resourceId, suggestion]))
   const selectedSuggestionResource = suggestionResourceOptions.find(
     (resource) => resource.id === selectedSuggestionResourceId,
   )
-  const selectedSuggestionMinutes = selectedSuggestionResource
-    ? (suggestionByResourceId.get(selectedSuggestionResource.id)?.plannedMinutes ?? selectedSuggestionResource.defaultMinutes)
-    : 0
+  const selectedSuggestionMinutes = selectedSuggestionResource?.defaultMinutes ?? 0
   const selectedAvatar = getAvatar(settings?.childAvatarId)
   const birthYears = Array.from({ length: 12 }, (_, index) => new Date().getFullYear() - index)
   const childAgeLabel = settings ? calculateAgeLabel(settings.childBirthYear, settings.childBirthMonth) : ''
@@ -524,30 +532,11 @@ function App() {
     showToast('建议已加入今日计划')
   }
 
-  const generateMonthPlans = async () => {
-    if (!settings) {
-      return
-    }
-
-    let added = 0
-    for (const date of getMonthDates(selectedMonth)) {
-      const count = await db.planItems.where('date').equals(date).count()
-      if (count === 0) {
-        const generated = generateDailyPlan(date, resources, schedules)
-        if (generated.length > 0) {
-          await db.planItems.bulkPut(generated)
-          added += generated.length
-        }
-      }
-    }
-    await loadData(selectedDate)
-    showToast(added > 0 ? `已生成 ${added} 个计划项` : '本月计划已存在')
-  }
-
-  const completeAsPlanned = async (plan: PlanItem) => {
+  const completeAsPlanned = async (plan: PlanItem, actualMinutes = plan.plannedMinutes) => {
     const resource = getResource(resources, plan.resourceId)
+    const minutes = Math.max(1, Math.round(Number(actualMinutes) || plan.plannedMinutes))
     const endTime = formatClock(new Date())
-    const startTime = addMinutesToTime(endTime, -plan.plannedMinutes)
+    const startTime = addMinutesToTime(endTime, -minutes)
 
     await db.sessions.add({
       id: newId('session'),
@@ -556,14 +545,19 @@ function App() {
       ability: primaryAbility(resource),
       startTime,
       endTime,
-      minutes: plan.plannedMinutes,
-      note: '按计划完成',
+      minutes,
+      note: minutes === plan.plannedMinutes ? '按建议时间完成' : '按实际分钟完成',
       planItemId: plan.id,
       createdAt: new Date().toISOString(),
     })
     await db.planItems.update(plan.id, { status: 'done' })
+    setActualMinutesByPlan((draft) => {
+      const next = { ...draft }
+      delete next[plan.id]
+      return next
+    })
     await loadData(selectedDate)
-    showToast('已按计划记录')
+    showToast('已按实际分钟记录')
   }
 
   const skipPlan = async (plan: PlanItem) => {
@@ -789,6 +783,7 @@ function App() {
                     datePlans.map((plan) => {
                       const resource = getResource(resources, plan.resourceId)
                       const isActive = activeSession?.planItemId === plan.id
+                      const actualMinutes = actualMinutesByPlan[plan.id] ?? plan.plannedMinutes
                       return (
                         <article key={plan.id} className={`plan-row ${plan.status}`}>
                           <span className="resource-dot" style={{ background: resource?.color }} />
@@ -799,6 +794,21 @@ function App() {
                               {resource ? abilityLabels[primaryAbility(resource)] : '未分类'}
                             </span>
                           </div>
+                          <label className="plan-minute-control">
+                            <span>实际分钟</span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={actualMinutes}
+                              onChange={(event) =>
+                                setActualMinutesByPlan((draft) => ({
+                                  ...draft,
+                                  [plan.id]: Number(event.target.value),
+                                }))
+                              }
+                              disabled={plan.status === 'done'}
+                            />
+                          </label>
                           <span className="status-pill">{statusLabels[plan.status]}</span>
                           <div className="row-actions">
                             {isActive ? (
@@ -826,9 +836,9 @@ function App() {
                             <button
                               type="button"
                               className="icon-button"
-                              title="按计划完成"
-                              aria-label="按计划完成"
-                              onClick={() => completeAsPlanned(plan)}
+                              title="按实际分钟完成"
+                              aria-label="按实际分钟完成"
+                              onClick={() => completeAsPlanned(plan, actualMinutes)}
                               disabled={plan.status === 'done'}
                             >
                               <CheckCircle2 size={16} aria-hidden="true" />
@@ -862,7 +872,7 @@ function App() {
                 <div className="suggestion-block">
                   <div className="suggestion-head">
                     <h3>可添加建议</h3>
-                    <span>自己选择内容，系统给出推荐时长</span>
+                    <span>内容和时长都读取资源库</span>
                   </div>
                   <div className="suggestion-picker">
                     <label>
@@ -895,7 +905,7 @@ function App() {
                         disabled={suggestionResourceOptions.length === 0}
                       >
                         <option value="">
-                          {suggestionResourceOptions.length === 0 ? '该类型今天暂无可添加内容' : '请选择具体内容'}
+                          {suggestionResourceOptions.length === 0 ? '该类型暂无可添加内容或已在今日计划' : '请选择具体内容'}
                         </option>
                         {suggestionResourceOptions.map((resource) => (
                           <option key={resource.id} value={resource.id}>
@@ -912,7 +922,7 @@ function App() {
                           <div>
                             <strong>{selectedSuggestionResource.name}</strong>
                             <span>
-                              建议 {formatMinutes(selectedSuggestionMinutes)} ·{' '}
+                              默认 {formatMinutes(selectedSuggestionMinutes)} · {resourceTypeLabels[selectedSuggestionResource.type]} ·{' '}
                               {abilityLabels[primaryAbility(selectedSuggestionResource)]}
                             </span>
                           </div>
@@ -943,7 +953,7 @@ function App() {
                   </div>
                 </div>
                 <div className="manual-grid">
-                  <label>
+                  <label className="manual-date-field">
                     <span>补录日期</span>
                     <input
                       type="date"
@@ -951,7 +961,18 @@ function App() {
                       onChange={(event) => setManualDraft((draft) => ({ ...draft, date: event.target.value }))}
                     />
                   </label>
-                  <label>
+                  <label className="manual-minutes-field">
+                    <span>分钟</span>
+                    <input
+                      type="number"
+                      min={1}
+                      value={manualDraft.minutes}
+                      onChange={(event) =>
+                        setManualDraft((draft) => ({ ...draft, minutes: Number(event.target.value) }))
+                      }
+                    />
+                  </label>
+                  <label className="manual-type-field">
                     <span>类型</span>
                     <select
                       value={manualDraft.ability}
@@ -972,7 +993,7 @@ function App() {
                       ))}
                     </select>
                   </label>
-                  <label>
+                  <label className="manual-resource-field">
                     <span>二级内容</span>
                     <select
                       value={selectedManualResource?.id ?? ''}
@@ -987,18 +1008,7 @@ function App() {
                       ))}
                     </select>
                   </label>
-                  <label>
-                    <span>分钟</span>
-                    <input
-                      type="number"
-                      min={1}
-                      value={manualDraft.minutes}
-                      onChange={(event) =>
-                        setManualDraft((draft) => ({ ...draft, minutes: Number(event.target.value) }))
-                      }
-                    />
-                  </label>
-                  <label className="wide-field">
+                  <label className="manual-note-field">
                     <span>备注</span>
                     <input
                       value={manualDraft.note}
@@ -1006,7 +1016,7 @@ function App() {
                       placeholder="例如：牛津树 2 本，Little Fox S1E3"
                     />
                   </label>
-                  <button type="button" className="primary-button" onClick={addManualSession}>
+                  <button type="button" className="primary-button manual-save-button" onClick={addManualSession}>
                     <Plus size={16} aria-hidden="true" />
                     保存记录
                   </button>
@@ -1062,10 +1072,10 @@ function App() {
           <section className="analysis-layout">
             <div className="metric-row">
               <Metric label="本月总时长" value={formatMinutes(monthlySummary.totalMinutes)} icon={<Clock3 size={18} />} />
-              <Metric label="计划完成率" value={`${monthlySummary.completionRate}%`} icon={<CheckCircle2 size={18} />} />
+              <Metric label="本月学习天数" value={`${monthlyStudyDays} 天`} icon={<CheckCircle2 size={18} />} />
               <Metric
-                label="日均时长"
-                value={formatMinutes(Math.round(monthlySummary.totalMinutes / new Date(Number(selectedMonth.slice(0, 4)), Number(selectedMonth.slice(5, 7)), 0).getDate()))}
+                label="学习日均时长"
+                value={formatMinutes(monthlyActualAverage)}
                 icon={<BarChart3 size={18} />}
               />
             </div>
@@ -1073,13 +1083,9 @@ function App() {
             <section className="panel">
               <div className="section-head">
                 <div>
-                  <h2>月度趋势</h2>
-                  <p>计划分钟和实际分钟对比。</p>
+                  <h2>月度实际趋势</h2>
+                  <p>只统计已打卡和补录的实际分钟数。</p>
                 </div>
-                <button type="button" className="ghost-button" onClick={generateMonthPlans}>
-                  <CalendarDays size={16} aria-hidden="true" />
-                  生成本月计划
-                </button>
               </div>
               <div className="chart-wrap">
                 <ResponsiveContainer width="100%" height={260}>
@@ -1088,9 +1094,32 @@ function App() {
                     <XAxis dataKey="date" tickFormatter={(value) => value.slice(8)} tickLine={false} axisLine={false} />
                     <YAxis tickLine={false} axisLine={false} width={34} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="planned" name="计划" stroke="#8f5f3f" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="actual" name="实际" stroke="#2f7d68" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="actual" name="实际分钟" stroke="#2f7d68" strokeWidth={2.4} dot={false} />
                   </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="section-head">
+                <div>
+                  <h2>{selectedYear} 年度分析</h2>
+                  <p>按月汇总实际学习时间，方便看长期节奏。</p>
+                </div>
+                <div className="section-meta">
+                  <strong>{formatMinutes(yearlyTotalMinutes)}</strong>
+                  <span>{yearlyActiveMonths} 个月有记录</span>
+                </div>
+              </div>
+              <div className="chart-wrap">
+                <ResponsiveContainer width="100%" height={280}>
+                  <BarChart data={yearlySummary}>
+                    <CartesianGrid stroke="#e7e4da" vertical={false} />
+                    <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                    <YAxis tickLine={false} axisLine={false} width={42} />
+                    <Tooltip />
+                    <Bar dataKey="minutes" name="实际分钟" fill="#2f7d68" radius={[5, 5, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               </div>
             </section>
@@ -1099,8 +1128,8 @@ function App() {
               <section className="panel">
                 <div className="section-head">
                   <div>
-                    <h2>按资源</h2>
-                    <p>看教材和内容投入是否偏科。</p>
+                    <h2>实际按资源</h2>
+                    <p>按本月已记录时间汇总教材和内容。</p>
                   </div>
                 </div>
                 <div className="chart-wrap">
@@ -1123,8 +1152,8 @@ function App() {
               <section className="panel">
                 <div className="section-head">
                   <div>
-                    <h2>按能力</h2>
-                    <p>阅读、听力、口语和外教课配比。</p>
+                    <h2>实际按能力</h2>
+                    <p>阅读、听力、口语和外教大课配比。</p>
                   </div>
                 </div>
                 <div className="chart-wrap">
@@ -1301,7 +1330,7 @@ function App() {
               <div className="section-head">
                 <div>
                   <h2>{scheduleDraft.id ? '编辑课表' : '新增课表'}</h2>
-                  <p>固定外教课会优先进入每日计划。</p>
+                  <p>固定外教大课会优先进入每日计划。</p>
                 </div>
               </div>
               <div className="form-grid">
@@ -1617,7 +1646,7 @@ function App() {
         <section className="inspector-block">
           <p className="eyebrow">{selectedMonth} 汇总</p>
           <strong>{formatMinutes(monthlySummary.totalMinutes)}</strong>
-          <span>计划 {formatMinutes(monthlySummary.plannedMinutes)} · 完成率 {monthlySummary.completionRate}%</span>
+          <span>{monthlyStudyDays} 天有记录 · 学习日均 {formatMinutes(monthlyActualAverage)}</span>
         </section>
 
         <section className="inspector-block">
