@@ -24,8 +24,8 @@ export const intensityLabels: Record<DailyIntensity, string> = {
 export const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 
 export const abilityColors: Record<Ability, string> = {
-  reading: '#4f8cff',
-  listening: '#21b7a8',
-  speaking: '#f2a65a',
-  class: '#d85f8a',
+  reading: '#3f73a8',
+  listening: '#2f8a7a',
+  speaking: '#c4833f',
+  class: '#b75a6b',
 }

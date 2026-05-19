@@ -117,7 +117,7 @@ const emptyResourceDraft: ResourceDraft = {
   ability: 'reading',
   defaultMinutes: 20,
   enabled: true,
-  color: '#2f7d68',
+  color: '#1f6f5f',
   notes: '',
 }
 
@@ -150,6 +150,9 @@ const categoryLabels: Record<Ability, string> = {
   speaking: '口语',
   class: '外教大课',
 }
+
+const chartGridColor = '#dfe4dc'
+const chartAccentColor = '#1f6f5f'
 
 const avatarOptions: AvatarOption[] = [
   { id: 'rose-princess', label: '玫瑰公主', group: '公主系', colors: ['#f7a8c4', '#f6d365'], icon: Crown },
@@ -1090,11 +1093,11 @@ function App() {
               <div className="chart-wrap">
                 <ResponsiveContainer width="100%" height={260}>
                   <LineChart data={monthlySummary.byDay}>
-                    <CartesianGrid stroke="#e7e4da" vertical={false} />
+                    <CartesianGrid stroke={chartGridColor} vertical={false} />
                     <XAxis dataKey="date" tickFormatter={(value) => value.slice(8)} tickLine={false} axisLine={false} />
                     <YAxis tickLine={false} axisLine={false} width={34} />
                     <Tooltip />
-                    <Line type="monotone" dataKey="actual" name="实际分钟" stroke="#2f7d68" strokeWidth={2.4} dot={false} />
+                    <Line type="monotone" dataKey="actual" name="实际分钟" stroke={chartAccentColor} strokeWidth={2.4} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -1114,11 +1117,11 @@ function App() {
               <div className="chart-wrap">
                 <ResponsiveContainer width="100%" height={280}>
                   <BarChart data={yearlySummary}>
-                    <CartesianGrid stroke="#e7e4da" vertical={false} />
+                    <CartesianGrid stroke={chartGridColor} vertical={false} />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} />
                     <YAxis tickLine={false} axisLine={false} width={42} />
                     <Tooltip />
-                    <Bar dataKey="minutes" name="实际分钟" fill="#2f7d68" radius={[5, 5, 0, 0]} />
+                    <Bar dataKey="minutes" name="实际分钟" fill={chartAccentColor} radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1135,7 +1138,7 @@ function App() {
                 <div className="chart-wrap">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart data={monthlySummary.byResource.slice(0, 8)}>
-                      <CartesianGrid stroke="#e7e4da" vertical={false} />
+                      <CartesianGrid stroke={chartGridColor} vertical={false} />
                       <XAxis dataKey="name" tickLine={false} axisLine={false} interval={0} height={58} />
                       <YAxis tickLine={false} axisLine={false} width={34} />
                       <Tooltip />

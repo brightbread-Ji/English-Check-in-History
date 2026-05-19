@@ -19,7 +19,7 @@ export const defaultResources: Resource[] = [
     abilities: ['reading'],
     defaultMinutes: 20,
     enabled: true,
-    color: '#2f7d68',
+    color: '#1f6f5f',
     notes: 'RAZ 分级阅读',
   },
   {
@@ -29,7 +29,7 @@ export const defaultResources: Resource[] = [
     abilities: ['reading'],
     defaultMinutes: 20,
     enabled: true,
-    color: '#4f8a55',
+    color: '#5f7f54',
     notes: '亲子分级阅读',
   },
   {
@@ -39,7 +39,7 @@ export const defaultResources: Resource[] = [
     abilities: ['class', 'speaking'],
     defaultMinutes: 25,
     enabled: true,
-    color: '#a64c59',
+    color: '#b75a6b',
     notes: '25 分钟 1 对 1 外教课',
   },
   {
@@ -49,7 +49,7 @@ export const defaultResources: Resource[] = [
     abilities: ['class', 'speaking'],
     defaultMinutes: 90,
     enabled: true,
-    color: '#8f5f3f',
+    color: '#8d6a4a',
     notes: '1.5 小时外教大课',
   },
   {
@@ -59,7 +59,7 @@ export const defaultResources: Resource[] = [
     abilities: ['listening'],
     defaultMinutes: 15,
     enabled: true,
-    color: '#3f6ea8',
+    color: '#3f73a8',
     notes: '动画熏听',
   },
   {
@@ -69,7 +69,7 @@ export const defaultResources: Resource[] = [
     abilities: ['listening'],
     defaultMinutes: 15,
     enabled: true,
-    color: '#4b7f9f',
+    color: '#4f8094',
     notes: '动画熏听',
   },
   {
@@ -79,7 +79,7 @@ export const defaultResources: Resource[] = [
     abilities: ['listening'],
     defaultMinutes: 20,
     enabled: true,
-    color: '#6b6a9f',
+    color: '#6c6f9e',
     notes: '故事熏听',
   },
   {
@@ -89,7 +89,7 @@ export const defaultResources: Resource[] = [
     abilities: ['listening'],
     defaultMinutes: 15,
     enabled: true,
-    color: '#b26b2f',
+    color: '#c4833f',
     notes: '数字主题熏听',
   },
 ]
