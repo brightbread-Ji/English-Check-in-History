@@ -173,7 +173,12 @@ const viewItems: Array<{ id: View; label: string; icon: typeof Home }> = [
 ]
 
 function newId(prefix: string) {
-  return `${prefix}-${crypto.randomUUID()}`
+  const uuid = globalThis.crypto?.randomUUID?.()
+  if (uuid) {
+    return `${prefix}-${uuid}`
+  }
+
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 function primaryAbility(resource: Resource | undefined): Ability {
