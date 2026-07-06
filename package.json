@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "node --experimental-sqlite server/index.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node --experimental-sqlite server/index.js",
+    "start": "node --experimental-sqlite server/index.js"
   },
   "dependencies": {
     "dexie": "^4.4.2",

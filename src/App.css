@@ -667,6 +667,20 @@ button {
   gap: 10px;
 }
 
+.sync-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) minmax(160px, 0.8fr) minmax(180px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
 .storage-note {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -1039,6 +1053,7 @@ button {
   .metric-row,
   .manual-grid,
   .form-grid,
+  .sync-grid,
   .inspector,
   .suggestion-picker,
   .child-profile,

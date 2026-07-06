@@ -45,6 +45,7 @@ import './App.css'
 import { db, ensureSeedData, readAllData, replaceAllData } from './db'
 import { exportBackup, exportMonthCsv, exportMonthWorkbook, parseBackup } from './exports'
 import { abilityColors, abilityLabels, intensityLabels, resourceTypeLabels, weekdays } from './labels'
+import { fetchRemoteData, loadSyncConfig, pushRemoteData, saveSyncConfig, type RemoteSnapshot, type SyncConfig } from './sync'
 import {
   addMinutesToTime,
   buildMonthlySummary,
@@ -289,6 +290,9 @@ function App() {
   })
   const [selectedSuggestionCategory, setSelectedSuggestionCategory] = useState<Ability>('reading')
   const [selectedSuggestionResourceId, setSelectedSuggestionResourceId] = useState('')
+  const [syncConfig, setSyncConfig] = useState<SyncConfig>(() => loadSyncConfig())
+  const [remoteSnapshot, setRemoteSnapshot] = useState<RemoteSnapshot | null>(null)
+  const [syncBusy, setSyncBusy] = useState(false)
   const resourceEditorRef = useRef<HTMLElement | null>(null)
 
   const selectedMonth = selectedDate.slice(0, 7)
@@ -693,6 +697,63 @@ function App() {
       showToast('备份已导入')
     } catch (error) {
       showToast(error instanceof Error ? error.message : '导入失败')
+    }
+  }
+
+  const saveCloudConfig = () => {
+    saveSyncConfig(syncConfig)
+    showToast('同步配置已保存')
+  }
+
+  const checkCloudStatus = async () => {
+    setSyncBusy(true)
+    try {
+      const remote = await fetchRemoteData(syncConfig)
+      setRemoteSnapshot(remote)
+      showToast(remote.exists ? `云端版本 ${remote.revision}` : '云端还没有数据')
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '检查云端失败')
+    } finally {
+      setSyncBusy(false)
+    }
+  }
+
+  const pullCloudData = async () => {
+    setSyncBusy(true)
+    try {
+      const remote = await fetchRemoteData(syncConfig)
+      setRemoteSnapshot(remote)
+      if (!remote.exists || !remote.data) {
+        showToast('云端还没有数据')
+        return
+      }
+
+      await replaceAllData(remote.data)
+      await loadData(selectedDate)
+      showToast(`已拉取云端版本 ${remote.revision}`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '拉取云端失败')
+    } finally {
+      setSyncBusy(false)
+    }
+  }
+
+  const pushCloudData = async () => {
+    if (!settings) {
+      return
+    }
+
+    setSyncBusy(true)
+    try {
+      const remote = await fetchRemoteData(syncConfig)
+      const localData = await readAllData()
+      const result = await pushRemoteData(syncConfig, localData, remote.revision)
+      setRemoteSnapshot({ ...result, data: localData })
+      showToast(`已上传云端版本 ${result.revision}`)
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '上传云端失败')
+    } finally {
+      setSyncBusy(false)
     }
   }
 
@@ -1557,6 +1618,70 @@ function App() {
                     <span className="avatar-upload-note">当前使用本地上传头像，数据保存在本机浏览器。</span>
                   )}
                 </div>
+              </div>
+            </section>
+
+            <section className="panel">
+              <div className="section-head">
+                <div>
+                  <h2>服务器同步</h2>
+                  <p>连接自己的 SQLite 同步服务，多台设备使用同一份学习记录。</p>
+                </div>
+              </div>
+              <div className="sync-grid">
+                <label>
+                  <span>同步地址</span>
+                  <input
+                    value={syncConfig.baseUrl}
+                    onChange={(event) => setSyncConfig((config) => ({ ...config, baseUrl: event.target.value }))}
+                    placeholder="留空使用当前域名，或填写 https://api.example.com"
+                  />
+                </label>
+                <label>
+                  <span>数据空间</span>
+                  <input
+                    value={syncConfig.datasetId}
+                    onChange={(event) => setSyncConfig((config) => ({ ...config, datasetId: event.target.value }))}
+                    placeholder="default"
+                  />
+                </label>
+                <label>
+                  <span>同步密钥</span>
+                  <input
+                    type="password"
+                    value={syncConfig.token}
+                    onChange={(event) => setSyncConfig((config) => ({ ...config, token: event.target.value }))}
+                    placeholder="服务器 SYNC_TOKEN"
+                  />
+                </label>
+              </div>
+              <div className="sync-actions">
+                <button type="button" className="ghost-button" onClick={saveCloudConfig} disabled={syncBusy}>
+                  <Save size={16} aria-hidden="true" />
+                  保存配置
+                </button>
+                <button type="button" className="ghost-button" onClick={checkCloudStatus} disabled={syncBusy}>
+                  <Database size={16} aria-hidden="true" />
+                  检查云端
+                </button>
+                <button type="button" className="ghost-button" onClick={pullCloudData} disabled={syncBusy}>
+                  <Download size={16} aria-hidden="true" />
+                  拉取云端
+                </button>
+                <button type="button" className="primary-button" onClick={pushCloudData} disabled={syncBusy}>
+                  <Upload size={16} aria-hidden="true" />
+                  上传本机
+                </button>
+              </div>
+              <div className="storage-note">
+                <strong>云端状态</strong>
+                <span>
+                  {remoteSnapshot
+                    ? remoteSnapshot.exists
+                      ? `版本 ${remoteSnapshot.revision} · ${remoteSnapshot.updatedAt ?? '未知时间'}`
+                      : '云端还没有数据'
+                    : '尚未检查云端'}
+                </span>
               </div>
             </section>
 
